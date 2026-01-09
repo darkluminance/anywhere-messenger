@@ -92,10 +92,24 @@ export function MessageList({ initialMessages }: MessageListProps) {
     return (
       <div className="space-y-4">
         <ConnectionStatus isConnected={isConnected} />
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <InboxIcon className="w-12 h-12 mb-4 opacity-50" />
-          <p className="text-lg font-medium">No messages yet</p>
-          <p className="text-sm">Send something to get started</p>
+          <p className="text-lg font-medium">Your inbox is empty</p>
+          <p className="text-sm mb-6">Try one of these:</p>
+          <div className="grid gap-2 text-sm text-left max-w-xs">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+              <span className="text-lg">📝</span>
+              <span>Paste a note or reminder</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+              <span className="text-lg">🔗</span>
+              <span>Share a link from your phone</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+              <span className="text-lg">📸</span>
+              <span>Ctrl+V to paste a screenshot</span>
+            </div>
+          </div>
         </div>
       </div>
     );

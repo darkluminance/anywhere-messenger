@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { MessageComposer } from "@/components/message-composer";
 import { MessageList } from "@/components/message-list";
+import { WelcomeBanner } from "@/components/welcome-banner";
 import { getMessages } from "@/app/actions/messages";
 
 export default async function HomePage() {
@@ -25,6 +26,7 @@ export default async function HomePage() {
       />
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <WelcomeBanner />
         <MessageComposer />
         <MessageList initialMessages={messages} />
       </main>
