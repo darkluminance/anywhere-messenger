@@ -206,55 +206,55 @@ export function MessageCard({ message }: MessageCardProps) {
             </button>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1.5">
             {message.type === "text" && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={handleCopy}
-                className="h-8 w-8 p-0"
+                className="h-9 w-9 p-0 bg-muted/50"
               >
                 {copied ? (
-                  <CheckIcon className="w-4 h-4 text-emerald-500" />
+                  <CheckIcon className="w-4.5 h-4.5 text-emerald-500" />
                 ) : (
-                  <CopyIcon className="w-4 h-4" />
+                  <CopyIcon className="w-4.5 h-4.5" />
                 )}
               </Button>
             )}
 
             {message.type === "link" && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={handleOpenLink}
-                className="h-8 w-8 p-0"
+                className="h-9 w-9 p-0 bg-muted/50"
               >
-                <ExternalLinkIcon className="w-4 h-4" />
+                <ExternalLinkIcon className="w-4.5 h-4.5" />
               </Button>
             )}
 
             {(message.type === "image" || message.type === "file") && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={handleDownload}
-                className="h-8 w-8 p-0"
+                className="h-9 w-9 p-0 bg-muted/50"
               >
-                <DownloadIcon className="w-4 h-4" />
+                <DownloadIcon className="w-4.5 h-4.5" />
               </Button>
             )}
 
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              className="h-9 w-9 p-0 bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20 hover:text-destructive"
             >
               {isDeleting ? (
-                <Loader2Icon className="w-4 h-4 animate-spin" />
+                <Loader2Icon className="w-4.5 h-4.5 animate-spin" />
               ) : (
-                <TrashIcon className="w-4 h-4" />
+                <TrashIcon className="w-4.5 h-4.5" />
               )}
             </Button>
           </div>
