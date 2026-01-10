@@ -41,6 +41,11 @@ CREATE POLICY "Users can update own messages" ON messages
 -- Enable realtime for messages table
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
+-- IMPORTANT: Enable REPLICA IDENTITY FULL for DELETE events to work with filters
+-- Without this, Supabase Realtime cannot filter DELETE events by user_id
+-- because PostgreSQL only sends the primary key by default for deleted rows
+ALTER TABLE messages REPLICA IDENTITY FULL;
+
 -- ============================================
 -- STORAGE BUCKET SETUP
 -- ============================================

@@ -212,7 +212,7 @@ export function MessageCard({ message }: MessageCardProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleCopy}
-                className="h-9 w-9 p-0 bg-muted/50"
+                className="h-9 w-9 p-0 bg-muted/50 transition-all hover:bg-primary/10 hover:border-primary/40 hover:text-primary hover:scale-105 active:scale-95"
               >
                 {copied ? (
                   <CheckIcon className="w-4.5 h-4.5 text-emerald-500" />
@@ -227,7 +227,7 @@ export function MessageCard({ message }: MessageCardProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleOpenLink}
-                className="h-9 w-9 p-0 bg-muted/50"
+                className="h-9 w-9 p-0 bg-muted/50 transition-all hover:bg-primary/10 hover:border-primary/40 hover:text-primary hover:scale-105 active:scale-95"
               >
                 <ExternalLinkIcon className="w-4.5 h-4.5" />
               </Button>
@@ -238,7 +238,7 @@ export function MessageCard({ message }: MessageCardProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleDownload}
-                className="h-9 w-9 p-0 bg-muted/50"
+                className="h-9 w-9 p-0 bg-muted/50 transition-all hover:bg-primary/10 hover:border-primary/40 hover:text-primary hover:scale-105 active:scale-95"
               >
                 <DownloadIcon className="w-4.5 h-4.5" />
               </Button>
@@ -249,7 +249,7 @@ export function MessageCard({ message }: MessageCardProps) {
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="h-9 w-9 p-0 bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20 hover:text-destructive"
+              className="h-9 w-9 p-0 bg-destructive/10 border-destructive/30 text-destructive transition-all hover:bg-destructive/20 hover:border-destructive/50 hover:text-destructive hover:scale-105 active:scale-95"
             >
               {isDeleting ? (
                 <Loader2Icon className="w-4.5 h-4.5 animate-spin" />
