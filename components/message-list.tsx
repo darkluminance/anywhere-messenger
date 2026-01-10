@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { MessageCard } from "@/components/message-card";
 import type { Message } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/client";
 import { getMessages } from "@/app/actions/messages";
 import { InboxIcon } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface MessageListProps {
   initialMessages: Message[];
@@ -14,74 +15,113 @@ interface MessageListProps {
 export function MessageList({ initialMessages }: MessageListProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isConnected, setIsConnected] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const supabaseRef = useRef(createClient());
 
   const refreshMessages = useCallback(async () => {
     const updatedMessages = await getMessages();
     setMessages(updatedMessages);
   }, []);
 
-  useEffect(() => {
-    const supabase = createClient();
+  const setupChannel = useCallback(async () => {
+    const supabase = supabaseRef.current;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
 
-    // Get current user for filtering
-    const setupRealtime = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
 
-      // Subscribe to realtime changes for this user's messages
-      const channel = supabase
-        .channel(`messages-${user.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            refreshMessages();
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "DELETE",
-            schema: "public",
-            table: "messages",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            refreshMessages();
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "messages",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            refreshMessages();
-          }
-        )
-        .subscribe((status) => {
-          setIsConnected(status === "SUBSCRIBED");
-        });
+    const channel = supabase
+      .channel(`messages-${user.id}`, {
+        config: {
+          presence: { key: user.id },
+        },
+      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          refreshMessages();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          refreshMessages();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          refreshMessages();
+        }
+      )
+      .subscribe((status) => {
+        setIsConnected(status === "SUBSCRIBED");
+      });
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    };
-
-    const cleanup = setupRealtime();
-    
-    return () => {
-      cleanup.then((fn) => fn?.());
-    };
+    channelRef.current = channel;
+    return channel;
   }, [refreshMessages]);
+
+  useEffect(() => {
+    setupChannel();
+
+    return () => {
+      if (channelRef.current) {
+        supabaseRef.current.removeChannel(channelRef.current);
+      }
+    };
+  }, [setupChannel]);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        await refreshMessages();
+
+        const channel = channelRef.current;
+        if (!channel) {
+          await setupChannel();
+        } else {
+          const state = channel.state;
+          if (state !== "joined" && state !== "joining") {
+            await setupChannel();
+          }
+        }
+      }
+    };
+
+    const handleOnline = async () => {
+      await refreshMessages();
+      await setupChannel();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [refreshMessages, setupChannel]);
 
   // Update messages when initialMessages changes (from server revalidation)
   useEffect(() => {
