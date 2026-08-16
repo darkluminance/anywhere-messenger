@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { Header } from "@/components/header";
 import { MessageComposer } from "@/components/message-composer";
 import { MessageList } from "@/components/message-list";
 import { WelcomeBanner } from "@/components/welcome-banner";
-import { getMessages } from "@/app/actions/messages";
+import { getMessages, cleanupExpired } from "@/app/actions/messages";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -17,6 +18,11 @@ export default async function HomePage() {
   }
 
   const messages = await getMessages();
+
+  // Purge expired messages/files after the response is sent, so cleanup
+  // never blocks page render. Runs only on full page loads, not on the
+  // client's realtime refreshes.
+  after(cleanupExpired);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">

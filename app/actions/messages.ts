@@ -56,17 +56,25 @@ export async function cleanupExpired(): Promise<void> {
     .lt("expires_at", new Date().toISOString());
 }
 
-// Get all messages for the current user
+const MESSAGE_COLUMNS =
+  "id, user_id, type, content, file_url, file_name, file_size, is_temporary, expires_at, created_at";
+const MESSAGE_PAGE_SIZE = 50;
+
+// Get messages for the current user (most recent first).
+// This is a pure read on the request critical path — no cleanup here.
+// Expired messages are filtered out in the query so they never render,
+// even before they are physically deleted by cleanupExpired().
 export async function getMessages(): Promise<Message[]> {
   const supabase = await createClient();
-  
-  // Clean up expired messages first
-  await cleanupExpired();
+
+  const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("messages")
-    .select("*")
-    .order("created_at", { ascending: false });
+    .select(MESSAGE_COLUMNS)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order("created_at", { ascending: false })
+    .limit(MESSAGE_PAGE_SIZE);
 
   if (error) {
     console.error("Error fetching messages:", error);
@@ -113,10 +121,17 @@ export async function sendMessage(
   return { success: true };
 }
 
-// Upload a file and create a message
-export async function uploadFile(
-  formData: FormData
-): Promise<{ success: boolean; error?: string }> {
+// Create a message row for a file that was already uploaded to storage
+// directly from the browser. The file itself never passes through this
+// Server Action, so it is not subject to the ~1MB Server Action body limit.
+export async function createFileMessage(input: {
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  type: MessageType;
+  description: string;
+  isTemporary: boolean;
+}): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
 
   const {
@@ -127,58 +142,31 @@ export async function uploadFile(
     return { success: false, error: "Not authenticated" };
   }
 
-  const file = formData.get("file") as File;
-  const isTemporary = formData.get("isTemporary") === "true";
-  const description = (formData.get("description") as string) || file.name;
-
-  if (!file) {
-    return { success: false, error: "No file provided" };
+  // Defense in depth: the uploaded path must live under the user's folder.
+  if (!input.filePath.startsWith(`${user.id}/`)) {
+    // Attempt to clean up the stray upload, then reject.
+    await supabase.storage.from("files").remove([input.filePath]);
+    return { success: false, error: "Invalid file path" };
   }
 
-  // Determine message type
-  const isImage = file.type.startsWith("image/");
-  const type: MessageType = isImage ? "image" : "file";
-
-  // Generate unique filename
-  const timestamp = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const filePath = `${user.id}/${timestamp}-${safeName}`;
-
-  // Upload to Supabase Storage
-  const { error: uploadError } = await supabase.storage
-    .from("files")
-    .upload(filePath, file);
-
-  if (uploadError) {
-    console.error("Error uploading file:", uploadError);
-    return { success: false, error: uploadError.message };
-  }
-
-  // Get public URL
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("files").getPublicUrl(filePath);
-
-  // For private buckets, we need to create a signed URL or use the path
-  // Since our bucket is private, we'll store the path and generate signed URLs when needed
-  const expiresAt = isTemporary
+  const expiresAt = input.isTemporary
     ? new Date(Date.now() + TEMP_MESSAGE_HOURS * 60 * 60 * 1000).toISOString()
     : null;
 
   const { error: insertError } = await supabase.from("messages").insert({
     user_id: user.id,
-    type,
-    content: description,
-    file_url: filePath, // Store path, not URL
-    file_name: file.name,
-    file_size: file.size,
-    is_temporary: isTemporary,
+    type: input.type,
+    content: input.description,
+    file_url: input.filePath, // Store path, not URL (private bucket)
+    file_name: input.fileName,
+    file_size: input.fileSize,
+    is_temporary: input.isTemporary,
     expires_at: expiresAt,
   });
 
   if (insertError) {
-    // Rollback: delete uploaded file
-    await supabase.storage.from("files").remove([filePath]);
+    // Rollback: delete the uploaded file so we don't orphan storage.
+    await supabase.storage.from("files").remove([input.filePath]);
     console.error("Error creating message:", insertError);
     return { success: false, error: insertError.message };
   }

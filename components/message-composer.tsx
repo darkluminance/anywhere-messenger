@@ -3,25 +3,38 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { sendMessage, uploadFile } from "@/app/actions/messages";
+import { sendMessage, createFileMessage } from "@/app/actions/messages";
+import { createClient } from "@/lib/supabase/client";
 import { ImageIcon, FileIcon, SendIcon, Loader2Icon } from "lucide-react";
+
+// Keep in sync with the Supabase Storage bucket's file size limit.
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 export function MessageComposer() {
   const [content, setContent] = useState("");
   const [isTemporary, setIsTemporary] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = async () => {
     if (!content.trim() || isLoading) return;
 
+    setError(null);
     setIsLoading(true);
-    const result = await sendMessage(content, isTemporary);
-    setIsLoading(false);
-
-    if (result.success) {
-      setContent("");
+    try {
+      const result = await sendMessage(content, isTemporary);
+      if (result.success) {
+        setContent("");
+      } else {
+        setError(result.error ?? "Could not send your message.");
+      }
+    } catch (err) {
+      console.error("Send failed:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -35,14 +48,64 @@ export function MessageComposer() {
   const handleFileUpload = async (file: File) => {
     if (isLoading) return;
 
-    setIsLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("isTemporary", String(isTemporary));
-    formData.append("description", file.name);
+    setError(null);
 
-    await uploadFile(formData);
-    setIsLoading(false);
+    if (file.size > MAX_FILE_SIZE) {
+      setError(
+        `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is ${
+          MAX_FILE_SIZE / 1024 / 1024
+        } MB.`
+      );
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError("You are not signed in. Reload and try again.");
+        return;
+      }
+
+      // Upload straight to Storage from the browser — bypasses the
+      // Server Action body-size limit that broke large images.
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filePath = `${user.id}/${timestamp}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("files")
+        .upload(filePath, file, {
+          contentType: file.type || undefined,
+        });
+
+      if (uploadError) {
+        setError(uploadError.message);
+        return;
+      }
+
+      const result = await createFileMessage({
+        filePath,
+        fileName: file.name,
+        fileSize: file.size,
+        type: file.type.startsWith("image/") ? "image" : "file",
+        description: file.name,
+        isTemporary,
+      });
+
+      if (!result.success) {
+        setError(result.error ?? "Could not save the file.");
+      }
+    } catch (err) {
+      console.error("File upload failed:", err);
+      setError("Upload failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,6 +147,12 @@ export function MessageComposer() {
           className="min-h-[80px] resize-none bg-background/50 border-border/50 focus:border-primary/50"
           disabled={isLoading}
         />
+
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
