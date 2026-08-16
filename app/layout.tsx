@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Figtree } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
@@ -25,6 +26,7 @@ export default function RootLayout({
         className={`${geistMono.variable} antialiased`}
       >
         {children}
+        <Toaster />
       </body>
     </html>
   );

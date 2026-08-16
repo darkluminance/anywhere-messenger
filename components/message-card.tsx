@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { Message } from "@/lib/supabase/types";
 import { deleteMessage, getFileUrl, toggleTemporary } from "@/app/actions/messages";
+import { toast } from "sonner";
 import {
   CopyIcon,
   TrashIcon,
@@ -30,22 +31,47 @@ export function MessageCard({ message }: MessageCardProps) {
   const [imageLoading, setImageLoading] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Copy failed:", err);
+      toast.error("Couldn't copy to clipboard.");
+    }
   };
 
   const handleDelete = async () => {
     if (isDeleting) return;
     setIsDeleting(true);
-    await deleteMessage(message.id);
+    try {
+      const result = await deleteMessage(message.id);
+      // On success the row disappears via revalidation; only surface failures.
+      if (!result.success) {
+        toast.error(result.error ?? "Could not delete this message.");
+        setIsDeleting(false);
+      }
+    } catch (err) {
+      console.error("Delete failed:", err);
+      toast.error("Delete failed. Please try again.");
+      setIsDeleting(false);
+    }
   };
 
   const handleToggleTemp = async () => {
     if (isToggling) return;
     setIsToggling(true);
-    await toggleTemporary(message.id, !message.is_temporary);
-    setIsToggling(false);
+    try {
+      const result = await toggleTemporary(message.id, !message.is_temporary);
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update this message.");
+      }
+    } catch (err) {
+      console.error("Toggle failed:", err);
+      toast.error("Update failed. Please try again.");
+    } finally {
+      setIsToggling(false);
+    }
   };
 
   const handleOpenLink = () => {
@@ -54,15 +80,21 @@ export function MessageCard({ message }: MessageCardProps) {
 
   const handleDownload = async () => {
     if (!message.file_url) return;
-
-    const { url } = await getFileUrl(message.file_url);
-    if (url) {
+    try {
+      const { url, error: urlError } = await getFileUrl(message.file_url);
+      if (urlError || !url) {
+        toast.error(urlError ?? "Could not generate a download link.");
+        return;
+      }
       const link = document.createElement("a");
       link.href = url;
       link.download = message.file_name || "download";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } catch (err) {
+      console.error("Download failed:", err);
+      toast.error("Download failed. Please try again.");
     }
   };
 
@@ -74,10 +106,21 @@ export function MessageCard({ message }: MessageCardProps) {
     
     const loadImage = async () => {
       setImageLoading(true);
-      const { url } = await getFileUrl(message.file_url!);
-      if (!cancelled) {
-        setImageUrl(url);
-        setImageLoading(false);
+      try {
+        const { url, error: urlError } = await getFileUrl(message.file_url!);
+        if (!cancelled) {
+          if (urlError || !url) {
+            toast.error(urlError ?? "Could not load this image.");
+          }
+          setImageUrl(url);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Image load failed:", err);
+          toast.error("Could not load this image.");
+        }
+      } finally {
+        if (!cancelled) setImageLoading(false);
       }
     };
     
